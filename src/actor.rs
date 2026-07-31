@@ -447,6 +447,7 @@ mod tests {
             cors_allowed_origins: Vec::new(),
             database_path: ":memory:".into(),
             object_storage_base_url: "https://uploads.example.invalid".to_owned(),
+            web_dist_path: "app/androidApp/build/dist/js/productionExecutable".into(),
         };
         let store = Arc::new(
             tokio::runtime::Builder::new_current_thread()

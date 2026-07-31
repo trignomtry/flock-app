@@ -1,6 +1,12 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use actix_cors::Cors;
+use actix_files::{Files, NamedFile};
+use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::http::header;
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, post, put, web};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
@@ -100,12 +106,22 @@ pub async fn run() -> std::io::Result<()> {
     let config = AppConfig::from_env().map_err(to_io_error)?;
     let bind_addr = config.bind_addr.clone();
     let cors_allowed_origins = config.cors_allowed_origins.clone();
+    let web_dist_path = config.web_dist_path.clone();
     let state = AppState::new(config).await.map_err(to_io_error)?;
 
-    tracing::info!("starting Flock API on {}", bind_addr);
+    tracing::info!("starting Flock web app and API on {}", bind_addr);
+    if web_dist_path.join("index.html").is_file() {
+        tracing::info!("serving Flock web app from {}", web_dist_path.display());
+    } else {
+        tracing::warn!(
+            "web app not found at {}; build it with `cd app && ./gradlew :androidApp:jsBrowserDistribution`",
+            web_dist_path.display(),
+        );
+    }
 
     HttpServer::new(move || {
         let allowed_origins = cors_allowed_origins.clone();
+        let web_files = spa_files(web_dist_path.clone());
         let cors = Cors::default()
             .allowed_origin_fn(move |origin, _| {
                 allowed_origins
@@ -141,10 +157,37 @@ pub async fn run() -> std::io::Result<()> {
             .service(discover_contacts)
             .service(ws_user)
             .service(ws_room)
+            .service(web_files)
     })
     .bind(bind_addr)?
     .run()
     .await
+}
+
+fn spa_files(web_dist_path: PathBuf) -> Files {
+    let index_path = web_dist_path.join("index.html");
+
+    Files::new("/", web_dist_path)
+        .index_file("index.html")
+        .prefer_utf8(true)
+        .default_handler(move |request: ServiceRequest| {
+            let index_path = index_path.clone();
+            async move {
+                let request_path = request.path();
+                let is_api_path = request_path == "/healthz"
+                    || request_path == "/v1"
+                    || request_path.starts_with("/v1/");
+                let is_asset_path = Path::new(request_path).extension().is_some();
+                if is_api_path || is_asset_path {
+                    return Ok(request.into_response(HttpResponse::NotFound().finish()));
+                }
+
+                let (request, _) = request.into_parts();
+                let file = NamedFile::open_async(index_path).await?;
+                let response = file.into_response(&request);
+                Ok(ServiceResponse::new(request, response))
+            }
+        })
 }
 
 fn init_tracing() {
@@ -1107,4 +1150,71 @@ async fn ws_room(
     });
 
     Ok(response)
+}
+
+#[cfg(test)]
+mod web_tests {
+    use actix_web::{App, http::StatusCode, test};
+
+    use super::*;
+
+    #[actix_web::test]
+    async fn web_files_preserve_api_routes_and_support_spa_fallback() {
+        let web_dir = std::env::temp_dir().join(format!("flock-web-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&web_dir).expect("test web directory should be created");
+        std::fs::write(web_dir.join("index.html"), "<title>Flock test</title>")
+            .expect("test index should be written");
+        std::fs::write(web_dir.join("flockApp.js"), "console.log('flock');")
+            .expect("test JavaScript should be written");
+
+        let service = test::init_service(
+            App::new()
+                .service(health)
+                .service(spa_files(web_dir.clone())),
+        )
+        .await;
+
+        let health_response = test::call_service(
+            &service,
+            test::TestRequest::get().uri("/healthz").to_request(),
+        )
+        .await;
+        assert_eq!(health_response.status(), StatusCode::OK);
+
+        let index_response =
+            test::call_service(&service, test::TestRequest::get().uri("/").to_request()).await;
+        assert_eq!(index_response.status(), StatusCode::OK);
+        assert!(
+            std::str::from_utf8(&test::read_body(index_response).await)
+                .expect("index response should be UTF-8")
+                .contains("Flock test")
+        );
+
+        let spa_response = test::call_service(
+            &service,
+            test::TestRequest::get().uri("/rooms/example").to_request(),
+        )
+        .await;
+        assert_eq!(spa_response.status(), StatusCode::OK);
+
+        let asset_response = test::call_service(
+            &service,
+            test::TestRequest::get().uri("/flockApp.js").to_request(),
+        )
+        .await;
+        assert_eq!(asset_response.status(), StatusCode::OK);
+
+        let missing_api_response = test::call_service(
+            &service,
+            test::TestRequest::get().uri("/v1/missing").to_request(),
+        )
+        .await;
+        assert_eq!(missing_api_response.status(), StatusCode::NOT_FOUND);
+
+        let api_root_response =
+            test::call_service(&service, test::TestRequest::get().uri("/v1").to_request()).await;
+        assert_eq!(api_root_response.status(), StatusCode::NOT_FOUND);
+
+        std::fs::remove_dir_all(web_dir).expect("test web directory should be removed");
+    }
 }

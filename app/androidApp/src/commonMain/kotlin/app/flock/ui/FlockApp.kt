@@ -313,7 +313,6 @@ fun FlockApp(
     remember {
         restoreState()?.let { restored ->
             LocalFlockState.account = restored.account
-            LocalFlockState.serverHost = restored.serverHost
             LocalFlockState.discoverableByPhone = restored.discoverableByPhone
             LocalFlockState.discoverableByEmail = restored.discoverableByEmail
             LocalFlockState.friends.replacePeopleWith(restored.friends)
@@ -344,7 +343,7 @@ fun FlockApp(
     }
     var account by remember { mutableStateOf(LocalFlockState.account) }
     var status by remember { mutableStateOf(LocalFlockState.status) }
-    var serverHost by remember { mutableStateOf(LocalFlockState.serverHost) }
+    val serverHost = defaultServerHost()
     var connectionProblem by remember { mutableStateOf(LocalFlockState.connectionProblem) }
     var openRoomId by remember { mutableStateOf(LocalFlockState.openRoomId) }
     var showNewChat by remember { mutableStateOf(LocalFlockState.showNewChat) }
@@ -422,7 +421,7 @@ fun FlockApp(
     LaunchedEffect(account, serverHost) {
         val profile = account ?: return@LaunchedEffect
         refreshFriendsAndRooms(
-            client = FlockClient(baseHost = serverHost.trim(), secure = false),
+            client = FlockClient(baseHost = serverHost.trim(), secure = true),
             profile = profile,
             friends = friends,
             rooms = rooms,
@@ -437,7 +436,7 @@ fun FlockApp(
         val profile = account ?: return@LaunchedEffect
         while (true) {
             runCatching {
-                FlockClient(baseHost = serverHost.trim(), secure = false)
+                FlockClient(baseHost = serverHost.trim(), secure = true)
                     .listFriends(profile.userId)
                     .map { it.toChatPerson() }
             }.onSuccess { serverFriends ->
@@ -453,14 +452,14 @@ fun FlockApp(
             status = Status.Connecting
             connectionProblem = null
             try {
-                FlockClient(baseHost = serverHost.trim(), secure = false)
+                FlockClient(baseHost = serverHost.trim(), secure = true)
                     .connectUser(profile.userId, profile.userId, outgoing)
                     .collect { event ->
                         when (event) {
                             SessionEvent.Connected -> {
                                 status = Status.Online
                                 refreshFriendsAndRooms(
-                                    client = FlockClient(baseHost = serverHost.trim(), secure = false),
+                                    client = FlockClient(baseHost = serverHost.trim(), secure = true),
                                     profile = profile,
                                     friends = friends,
                                     rooms = rooms,
@@ -477,7 +476,7 @@ fun FlockApp(
                                 event.envelope.roomCreated?.let { created ->
                                     val roomId = created.roomId.toUuidString()
                                     refreshFriendsAndRooms(
-                                        client = FlockClient(baseHost = serverHost.trim(), secure = false),
+                                        client = FlockClient(baseHost = serverHost.trim(), secure = true),
                                         profile = profile,
                                         friends = friends,
                                         rooms = rooms,
@@ -521,7 +520,7 @@ fun FlockApp(
                                         openRoomId == roomId && (selectedChannelByRoom[roomId] ?: GeneralChannelId) == channelId
                                     if (!mine) {
                                         launch {
-                                            val client = FlockClient(baseHost = serverHost.trim(), secure = false)
+                                            val client = FlockClient(baseHost = serverHost.trim(), secure = true)
                                             client.ackMessage(roomId, messageId, profile.userId, "delivered")
                                             if (isOpenSelectedChannel) {
                                                 client.ackMessage(roomId, messageId, profile.userId, "read")
@@ -530,7 +529,7 @@ fun FlockApp(
                                     }
                                     if (kind == MessageKind.MESSAGE_KIND_SYSTEM) {
                                         launch {
-                                            val client = FlockClient(baseHost = serverHost.trim(), secure = false)
+                                            val client = FlockClient(baseHost = serverHost.trim(), secure = true)
                                             runCatching {
                                                 client.listRoomChannels(roomId, profile.userId).map { it.toChatChannel(roomId) }
                                             }.onSuccess { serverChannels ->
@@ -604,7 +603,6 @@ fun FlockApp(
             if (account == null) {
                 AccountScreen(
                     serverHost = serverHost,
-                    onServerHostChange = { serverHost = it },
                     onComplete = { profile, phonePrivacy, emailPrivacy ->
                         account = profile
                         discoverableByPhone = phonePrivacy
@@ -628,7 +626,7 @@ fun FlockApp(
                         discoverableByEmail = email
                         scope.launch {
                             runCatching {
-                                FlockClient(baseHost = serverHost.trim(), secure = false).updatePrivacy(
+                                FlockClient(baseHost = serverHost.trim(), secure = true).updatePrivacy(
                                     userId = account!!.userId,
                                     request = PrivacyRequest(
                                         discoverable_by_email = email,
@@ -671,7 +669,7 @@ fun FlockApp(
                         showNewChat = false
                         scope.launch {
                             refreshFriendsAndRooms(
-                                client = FlockClient(baseHost = serverHost.trim(), secure = false),
+                                client = FlockClient(baseHost = serverHost.trim(), secure = true),
                                 profile = account!!,
                                 friends = friends,
                                 rooms = rooms,
@@ -741,7 +739,7 @@ fun FlockApp(
                         unreadCountsByChannel[key] = 0
                         if (channel.joined) scope.launch {
                             fetchAndMergeRoomHistory(
-                                client = FlockClient(baseHost = serverHost.trim(), secure = false),
+                                client = FlockClient(baseHost = serverHost.trim(), secure = true),
                                 profile = account!!,
                                 room = openRoom,
                                 channelId = channel.id,
@@ -756,7 +754,7 @@ fun FlockApp(
                             val index = roomChannels.indexOfFirst { it.id == channel.id }
                             if (index >= 0) roomChannels[index] = local
                             runCatching {
-                                FlockClient(baseHost = serverHost.trim(), secure = false).updateRoomChannelMembership(
+                                FlockClient(baseHost = serverHost.trim(), secure = true).updateRoomChannelMembership(
                                     roomId = openRoom.id,
                                     channelId = channel.id,
                                     request = TopicChannelMembershipRequest(
@@ -770,7 +768,7 @@ fun FlockApp(
                                 val updatedIndex = roomChannels.indexOfFirst { it.id == updated.id }
                                 if (updatedIndex >= 0) roomChannels[updatedIndex] = updated else roomChannels.add(updated)
                                 fetchAndMergeRoomHistory(
-                                    client = FlockClient(baseHost = serverHost.trim(), secure = false),
+                                    client = FlockClient(baseHost = serverHost.trim(), secure = true),
                                     profile = account!!,
                                     room = openRoom,
                                     channelId = updated.id,
@@ -793,7 +791,7 @@ fun FlockApp(
                             selectedChannelByRoom[openRoom.id] = localChannel.id
                             messagesByRoom.getOrPut(channelMessageKey(openRoom.id, localChannel.id)) { mutableStateListOf() }
                             runCatching {
-                                FlockClient(baseHost = serverHost.trim(), secure = false).createRoomChannel(
+                                FlockClient(baseHost = serverHost.trim(), secure = true).createRoomChannel(
                                     roomId = openRoom.id,
                                     request = CreateTopicChannelRequest(
                                         creator_user_id = account!!.userId,
@@ -858,7 +856,7 @@ fun FlockApp(
                     unreadCountsByChannel[selectedKey] = 0
                         scope.launch { outgoing.emit(joinRoomEnvelope(it.id)) }
                     scope.launch {
-                        val client = FlockClient(baseHost = serverHost.trim(), secure = false)
+                        val client = FlockClient(baseHost = serverHost.trim(), secure = true)
                         val channelList = channelsByRoom.getOrPut(it.id) {
                             mutableStateListOf<ChatChannel>().apply { add(generalChannel(it.id)) }
                         }
@@ -882,7 +880,7 @@ fun FlockApp(
                 onFriendAdded = {
                     scope.launch {
                         refreshFriendsAndRooms(
-                            client = FlockClient(baseHost = serverHost.trim(), secure = false),
+                            client = FlockClient(baseHost = serverHost.trim(), secure = true),
                             profile = account!!,
                             friends = friends,
                             rooms = rooms,
@@ -896,7 +894,7 @@ fun FlockApp(
                 onFriendChat = { friend ->
                     scope.launch {
                         runCatching {
-                            FlockClient(baseHost = serverHost.trim(), secure = false).createRoom(
+                            FlockClient(baseHost = serverHost.trim(), secure = true).createRoom(
                                 CreateRoomRequest(
                                     creator_user_id = account!!.userId,
                                     room_type = "direct",
@@ -1341,7 +1339,6 @@ private fun ChatMessage.isWordleStylePost(): Boolean {
 @Composable
 private fun AccountScreen(
     serverHost: String,
-    onServerHostChange: (String) -> Unit,
     onComplete: (UserProfile, Boolean, Boolean) -> Unit,
 ) {
     var mode by remember { mutableStateOf(AccountMode.Register) }
@@ -1401,7 +1398,7 @@ private fun AccountScreen(
             }
             OutlinedTextField(contact, { contact = it.trim() }, Modifier.fillMaxWidth(), label = { Text("Phone or email") }, singleLine = true)
             OutlinedTextField(code, { code = it.take(6) }, Modifier.fillMaxWidth(), label = { Text("Verification code") }, placeholder = { Text("Use 1234 while running locally") }, singleLine = true)
-            OutlinedTextField(serverHost, onServerHostChange, Modifier.fillMaxWidth(), label = { Text("Server") }, singleLine = true)
+            Text("Server: $serverHost", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (errorText != null) {
             GentleCard("Could not continue", errorText ?: "")
@@ -1416,7 +1413,7 @@ private fun AccountScreen(
                 scope.launch {
                     isSubmitting = true
                     errorText = null
-                    val client = FlockClient(baseHost = serverHost.trim(), secure = false)
+                    val client = FlockClient(baseHost = serverHost.trim(), secure = true)
                     runCatching {
                         if (mode == AccountMode.Register) {
                             val registered = client.registerUser(
@@ -1658,7 +1655,7 @@ private fun FriendsPanel(
     fun refreshRequests() {
         scope.launch {
             runCatching {
-                FlockClient(baseHost = serverHost.trim(), secure = false).listFriendRequests(account.userId)
+                FlockClient(baseHost = serverHost.trim(), secure = true).listFriendRequests(account.userId)
             }.onSuccess { requests ->
                 incomingRequests = requests.incoming
                 outgoingRequests = requests.outgoing
@@ -1669,7 +1666,7 @@ private fun FriendsPanel(
     LaunchedEffect(account.userId, serverHost) {
         while (true) {
             runCatching {
-                FlockClient(baseHost = serverHost.trim(), secure = false).listFriendRequests(account.userId)
+                FlockClient(baseHost = serverHost.trim(), secure = true).listFriendRequests(account.userId)
             }.onSuccess { requests ->
                 incomingRequests = requests.incoming
                 outgoingRequests = requests.outgoing
@@ -1694,7 +1691,7 @@ private fun FriendsPanel(
                     onAccept = {
                         scope.launch {
                             runCatching {
-                                FlockClient(baseHost = serverHost.trim(), secure = false)
+                                FlockClient(baseHost = serverHost.trim(), secure = true)
                                     .acceptFriendRequest(account.userId, request.requester_user_id)
                             }.onSuccess { response ->
                                 if (friends.none { it.id == response.friend.user_id }) friends.add(response.friend.toChatPerson())
@@ -1709,7 +1706,7 @@ private fun FriendsPanel(
                     onReject = {
                         scope.launch {
                             runCatching {
-                                FlockClient(baseHost = serverHost.trim(), secure = false)
+                                FlockClient(baseHost = serverHost.trim(), secure = true)
                                     .rejectFriendRequest(account.userId, request.requester_user_id)
                             }.onSuccess {
                                 stateText = "Request rejected."
@@ -1746,7 +1743,7 @@ private fun FriendsPanel(
                         isSearching = false
                         return@launch
                     }
-                    val client = FlockClient(baseHost = serverHost.trim(), secure = false)
+                    val client = FlockClient(baseHost = serverHost.trim(), secure = true)
                     ensureBackendUser(client, account)
                     runCatching {
                         client.discoverContacts(
@@ -1783,7 +1780,7 @@ private fun FriendsPanel(
                 onAdd = {
                     scope.launch {
                         runCatching {
-                            FlockClient(baseHost = serverHost.trim(), secure = false).addFriend(account.userId, person.id)
+                            FlockClient(baseHost = serverHost.trim(), secure = true).addFriend(account.userId, person.id)
                         }.onSuccess { response ->
                             if (response.request.status == "accepted" && friends.none { it.id == person.id }) {
                                 friends.add(response.friend.toChatPerson())
@@ -1814,7 +1811,7 @@ private fun FriendsPanel(
                         isSearching = true
                         stateText = ""
                         results = emptyList()
-                        val client = FlockClient(baseHost = serverHost.trim(), secure = false)
+                        val client = FlockClient(baseHost = serverHost.trim(), secure = true)
                         ensureBackendUser(client, account)
                         runCatching {
                             client.searchUsers(query.trim().removePrefix("@"), requesterId = account.userId)
@@ -1844,7 +1841,7 @@ private fun FriendsPanel(
                 onAdd = {
                     scope.launch {
                         runCatching {
-                            FlockClient(baseHost = serverHost.trim(), secure = false).addFriend(account.userId, person.id)
+                            FlockClient(baseHost = serverHost.trim(), secure = true).addFriend(account.userId, person.id)
                         }.onSuccess { response ->
                             if (response.request.status == "accepted" && friends.none { it.id == person.id }) {
                                 friends.add(response.friend.toChatPerson())
@@ -1990,7 +1987,7 @@ private fun NewChatScreen(
                         stateText = ""
                         searchResults = emptyList()
                         val query = usernameSearch.trim()
-                        val client = FlockClient(baseHost = serverHost.trim(), secure = false)
+                        val client = FlockClient(baseHost = serverHost.trim(), secure = true)
                         runCatching {
                             if (contactPeople.isEmpty()) {
                                 val contacts = runCatching { onContactsRequested() }.getOrDefault(emptyList())
@@ -2060,7 +2057,7 @@ private fun NewChatScreen(
                         val people = selectedPeople.toList()
                         val chatName = name.trim().ifBlank { defaultChatName }
                         runCatching {
-                            FlockClient(baseHost = serverHost.trim(), secure = false).createRoom(
+                            FlockClient(baseHost = serverHost.trim(), secure = true).createRoom(
                                 CreateRoomRequest(
                                     creator_user_id = account.userId,
                                     room_type = if (people.size == 1) "direct" else "group",
@@ -2153,7 +2150,7 @@ private fun ManageChatScreen(
                     onChannelChanged(updated)
                     scope.launch {
                         runCatching {
-                            FlockClient(baseHost = serverHost.trim(), secure = false).updateRoomChannelMembership(
+                            FlockClient(baseHost = serverHost.trim(), secure = true).updateRoomChannelMembership(
                                 roomId = room.id,
                                 channelId = channel.id,
                                 request = TopicChannelMembershipRequest(
@@ -2170,7 +2167,7 @@ private fun ManageChatScreen(
                     onChannelChanged(updated)
                     scope.launch {
                         runCatching {
-                            FlockClient(baseHost = serverHost.trim(), secure = false).updateRoomChannelMembership(
+                            FlockClient(baseHost = serverHost.trim(), secure = true).updateRoomChannelMembership(
                                 roomId = room.id,
                                 channelId = channel.id,
                                 request = TopicChannelMembershipRequest(
@@ -2199,7 +2196,7 @@ private fun ManageChatScreen(
                         stateText = ""
                         val people = selectedPeople.toList()
                         runCatching {
-                            FlockClient(baseHost = serverHost.trim(), secure = false).updateRoom(
+                            FlockClient(baseHost = serverHost.trim(), secure = true).updateRoom(
                                 roomId = room.id,
                                 request = UpdateRoomRequest(
                                     requester_user_id = account.userId,

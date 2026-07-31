@@ -7,6 +7,7 @@ import app.flock.ui.ChatPerson
 import app.flock.ui.ChatRoom
 import app.flock.ui.FlockPersistedState
 import app.flock.ui.UserProfile
+import app.flock.ui.defaultServerHost
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -58,7 +59,7 @@ object FlockLocalStore {
         val channelRooms = optJSONObject("channelsByRoom") ?: JSONObject()
         return FlockPersistedState(
             account = optJSONObject("account")?.toUserProfile(),
-            serverHost = optString("serverHost", "10.0.2.2:3000"),
+            serverHost = defaultServerHost(),
             discoverableByPhone = optBoolean("discoverableByPhone", false),
             discoverableByEmail = optBoolean("discoverableByEmail", false),
             friends = optJSONArray("friends").toList { it.toChatPerson() },

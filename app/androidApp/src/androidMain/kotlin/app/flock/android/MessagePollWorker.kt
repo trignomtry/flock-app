@@ -28,7 +28,7 @@ class MessagePollWorker(
     override suspend fun doWork(): Result {
         val state = FlockLocalStore.load(applicationContext) ?: return Result.success()
         val account = state.account ?: return Result.success()
-        val client = FlockClient(baseHost = state.serverHost.trim(), secure = false)
+        val client = FlockClient(baseHost = state.serverHost.trim(), secure = true)
         val updatedMessages = state.messagesByRoom.toMutableMap()
         val updatedUnread = state.unreadCountsByChannel.toMutableMap()
         var changed = false

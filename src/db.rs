@@ -1487,6 +1487,7 @@ mod tests {
             cors_allowed_origins: Vec::new(),
             database_path: std::env::temp_dir().join(format!("flock-test-{}.db", Uuid::new_v4())),
             object_storage_base_url: "https://uploads.example.invalid".to_owned(),
+            web_dist_path: "app/androidApp/build/dist/js/productionExecutable".into(),
         };
 
         MessageStore::connect(&config)

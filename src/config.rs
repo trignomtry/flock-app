@@ -9,13 +9,14 @@ pub struct AppConfig {
     pub cors_allowed_origins: Vec<String>,
     pub database_path: PathBuf,
     pub object_storage_base_url: String,
+    pub web_dist_path: PathBuf,
 }
 
 impl AppConfig {
     pub fn from_env() -> Result<Self, AppError> {
         let bind_addr = match env::var("FLOCK_BIND_ADDR") {
             Ok(value) => value,
-            Err(_) => "127.0.0.1:8080".to_owned(),
+            Err(_) => "0.0.0.0:1003".to_owned(),
         };
 
         let database_path = match env::var("FLOCK_DATABASE_PATH") {
@@ -35,12 +36,20 @@ impl AppConfig {
                 "http://127.0.0.1:8080".to_owned(),
                 "http://localhost:8081".to_owned(),
                 "http://127.0.0.1:8081".to_owned(),
+                "http://localhost:1003".to_owned(),
+                "http://127.0.0.1:1003".to_owned(),
+                "https://flock.vortice.app".to_owned(),
             ],
         };
 
         let object_storage_base_url = match env::var("OBJECT_STORAGE_BASE_URL") {
             Ok(value) => value,
             Err(_) => "https://uploads.example.invalid".to_owned(),
+        };
+
+        let web_dist_path = match env::var("FLOCK_WEB_DIST_PATH") {
+            Ok(value) => PathBuf::from(value),
+            Err(_) => PathBuf::from("app/androidApp/build/dist/js/productionExecutable"),
         };
 
         if bind_addr.trim().is_empty() {
@@ -55,6 +64,7 @@ impl AppConfig {
             cors_allowed_origins,
             database_path,
             object_storage_base_url,
+            web_dist_path,
         })
     }
 }
