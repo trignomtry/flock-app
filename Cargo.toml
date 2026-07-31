@@ -1,0 +1,26 @@
+[package]
+name = "flock-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web = "4.8"
+actix-cors = "0.7"
+actix-ws = "0.3"
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+hex = "0.4"
+futures-util = "0.3"
+libsql = { version = "0.9.30", default-features = false, features = ["core"] }
+prost = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+
+[build-dependencies]
+prost-build = "0.13"

@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+package flock.v1;
+
+message Uuid {
+  bytes value = 1;
+}
+
+message TimestampMillis {
+  int64 value = 1;
+}
+
+enum MessageKind {
+  MESSAGE_KIND_UNSPECIFIED = 0;
+  MESSAGE_KIND_TEXT = 1;
+  MESSAGE_KIND_IMAGE = 2;
+  MESSAGE_KIND_VIDEO = 3;
+  MESSAGE_KIND_SYSTEM = 4;
+}
+
+message ClientEnvelope {
+  Uuid request_id = 1;
+  oneof payload {
+    SendMessage send_message = 2;
+    JoinRoom join_room = 3;
+    LeaveRoom leave_room = 4;
+    Typing typing = 5;
+    Ack ack = 6;
+    Ping ping = 7;
+  }
+}
+
+message ServerEnvelope {
+  Uuid event_id = 1;
+  TimestampMillis server_time = 2;
+  oneof payload {
+    MessageCreated message_created = 3;
+    MessageUpdated message_updated = 4;
+    MessageDeleted message_deleted = 5;
+    PresenceChanged presence_changed = 6;
+    Typing typing = 7;
+    MediaReady media_ready = 8;
+    ErrorEvent error = 9;
+    Pong pong = 10;
+    RoomCreated room_created = 11;
+  }
+}
+
+message SendMessage {
+  Uuid room_id = 1;
+  Uuid client_message_id = 2;
+  MessageKind kind = 3;
+  bytes body = 4;
+  optional Uuid media_upload_id = 5;
+  optional bytes reply_to_message_id = 6;
+  optional Uuid channel_id = 7;
+}
+
+message MessageCreated {
+  Uuid room_id = 1;
+  bytes message_id = 2;
+  Uuid sender_user_id = 3;
+  MessageKind kind = 4;
+  bytes body = 5;
+  TimestampMillis created_at = 6;
+  optional Uuid client_message_id = 7;
+  optional Uuid media_upload_id = 8;
+  optional Uuid channel_id = 9;
+}
+
+message MessageUpdated {
+  Uuid room_id = 1;
+  bytes message_id = 2;
+  bytes body = 3;
+  TimestampMillis edited_at = 4;
+}
+
+message MessageDeleted {
+  Uuid room_id = 1;
+  bytes message_id = 2;
+  TimestampMillis deleted_at = 3;
+}
+
+message MediaReady {
+  Uuid room_id = 1;
+  Uuid upload_id = 2;
+  bytes message_id = 3;
+  string public_url = 4;
+  string manifest_json = 5;
+}
+
+message JoinRoom {
+  Uuid room_id = 1;
+}
+
+message LeaveRoom {
+  Uuid room_id = 1;
+}
+
+message Typing {
+  Uuid room_id = 1;
+  Uuid user_id = 2;
+  bool is_typing = 3;
+}
+
+message Ack {
+  Uuid room_id = 1;
+  bytes message_id = 2;
+}
+
+message PresenceChanged {
+  Uuid room_id = 1;
+  Uuid user_id = 2;
+  bool online = 3;
+}
+
+message Ping {
+  int64 nonce = 1;
+}
+
+message Pong {
+  int64 nonce = 1;
+}
+
+message RoomCreated {
+  Uuid room_id = 1;
+}
+
+message ErrorEvent {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+message ContactDiscoveryRequest {
+  repeated ContactHash contacts = 1;
+}
+
+message ContactHash {
+  string alias_type = 1;
+  bytes sha256 = 2;
+}
+
+message ContactDiscoveryResponse {
+  repeated ContactMatch matches = 1;
+}
+
+message ContactMatch {
+  Uuid user_id = 1;
+  string display_name = 2;
+  optional string username = 3;
+  repeated string matched_alias_types = 4;
+}

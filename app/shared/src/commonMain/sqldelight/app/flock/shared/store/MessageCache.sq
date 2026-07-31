@@ -1,0 +1,79 @@
+CREATE TABLE message_cache (
+  room_id TEXT NOT NULL,
+  message_id TEXT,
+  client_message_id TEXT NOT NULL,
+  sender_user_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  body BLOB NOT NULL,
+  created_at INTEGER NOT NULL,
+  edited_at INTEGER,
+  deleted_at INTEGER,
+  delivery_state TEXT NOT NULL,
+  media_upload_id TEXT,
+  media_url TEXT,
+  PRIMARY KEY (room_id, client_message_id)
+);
+
+CREATE INDEX message_cache_room_created_idx
+ON message_cache(room_id, created_at DESC);
+
+selectRoomMessages:
+SELECT *
+FROM message_cache
+WHERE room_id = ?
+  AND deleted_at IS NULL
+ORDER BY created_at DESC
+LIMIT ?;
+
+insertMessageIfAbsent:
+INSERT OR IGNORE INTO message_cache (
+  room_id,
+  message_id,
+  client_message_id,
+  sender_user_id,
+  kind,
+  body,
+  created_at,
+  edited_at,
+  deleted_at,
+  delivery_state,
+  media_upload_id,
+  media_url
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+;
+
+updateCachedMessageDelivery:
+UPDATE message_cache
+SET
+  message_id = ?,
+  delivery_state = ?,
+  media_url = ?
+WHERE room_id = ?
+  AND client_message_id = ?;
+
+markMessageDeleted:
+UPDATE message_cache
+SET deleted_at = ?
+WHERE room_id = ?
+  AND client_message_id = ?;
+
+updateMessageContent:
+UPDATE message_cache
+SET body = :body, edited_at = :edited_at
+WHERE room_id = :room_id
+  AND (
+    (:client_message_id IS NOT NULL AND client_message_id = :client_message_id)
+    OR (:message_id IS NOT NULL AND message_id = :message_id)
+  );
+
+updateDeliveryState:
+UPDATE message_cache
+SET delivery_state = ?
+WHERE room_id = ?
+  AND client_message_id = ?;
+
+selectPendingMessages:
+SELECT *
+FROM message_cache
+WHERE room_id = ?
+  AND delivery_state = 'PENDING';
